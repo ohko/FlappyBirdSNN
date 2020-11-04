@@ -167,10 +167,14 @@ Game.prototype.start = function () {
 Game.prototype.update = function () {
 	this.backgroundx += this.backgroundSpeed;
 	var nextHoll = 0;
+	var nextPipeX = 0;
+	var nextPipeY = 0;
 	if (this.birds.length > 0) {
 		for (var i = 0; i < this.pipes.length; i += 2) {
 			if (this.pipes[i].x + this.pipes[i].width > this.birds[0].x) {
 				nextHoll = this.pipes[i].height / this.height;
+				nextPipeX = this.pipes[i].x
+				nextPipeY = this.pipes[i].height + 60
 				break;
 			}
 		}
@@ -180,13 +184,15 @@ Game.prototype.update = function () {
 		if (this.birds[i].alive) {
 
 			var inputs = [
-				this.birds[i].y / this.height,
-				nextHoll
+				// this.birds[i].y / this.height,
+				// nextHoll,
+				(this.birds[i].x - nextPipeX) / 420,
+				(this.birds[i].y - nextPipeY) / 440,
 			];
 
 			// === flap ===
 			var res = myBrids[i].activate(inputs)[0]
-			if (res > 0.55) this.birds[i].flap();
+			if (res > 0.5) this.birds[i].flap();
 
 			this.birds[i].update();
 			if (this.birds[i].isDead(this.height, this.pipes)) {
@@ -194,7 +200,7 @@ Game.prototype.update = function () {
 				this.alives--;
 
 				// === score ===
-				myBrids[i].score = this.score
+				if (this.score > myBrids[i].score || !myBrids[i].score) myBrids[i].score = this.score
 
 				if (this.isItEnd()) {
 
@@ -317,24 +323,43 @@ window.onload = function () {
 
 
 // === AI ===
-var bridCount = 100;
+var mutateRate = 1;
+var bridCount = 10;
+var topUnit = 4;
 var myBrids = [];
 for (var i = 0; i < bridCount; i++) {
 	myBrids.push(new synaptic.Architect.Perceptron(2, 3, 1))
+	// myBrids.push(new synaptic.Architect.LSTM(2, 3, 1))
 }
 
 function next() {
-	var winners = []
 	for (var j = 0; j < bridCount; j++) {
-		var x = myBrids[j]
-		x.score = myBrids[j].score
-		winners.push(x)
+		if (myBrids[j].score > 100) mutateRate = 0.2
 	}
-	winners.sort(function (x, y) { return x.score < y.score ? 1 : -1 })
+	myBrids.sort(function (x, y) { return x.score < y.score ? 1 : -1 })
 
-	for (var j = 0; j < bridCount; j++) {
-		var c = mutation(cross(winners[0].toJSON(), winners[1].toJSON(), "bias"))
-		myBrids[j] = synaptic.Network.fromJSON(c)
+	for (var j = topUnit; j < bridCount; j++) {
+		// var c = mutation(cross(myBrids[0].toJSON(), myBrids[1].toJSON(), "bias"))
+		// myBrids[j] = synaptic.Network.fromJSON(c)
+
+		var parentA, parentB, offspring;
+		if (j == topUnit) {
+			// offspring is made by a crossover of two best winners
+			parentA = myBrids[0].toJSON();
+			parentB = myBrids[1].toJSON();
+			offspring = cross(parentA, parentB, "bias");
+		} else if (j < bridCount - 2) {
+			// offspring is made by a crossover of two random winners
+			parentA = myBrids[random(0, 3)].toJSON();
+			parentB = myBrids[random(0, 3)].toJSON();
+			offspring = cross(parentA, parentB, "bias");
+		} else {
+			// offspring is a random winner
+			offspring = myBrids[random(0, 3)].toJSON();
+		}
+
+		offspring = mutation(offspring);
+		myBrids[j] = synaptic.Network.fromJSON(offspring)
 	}
 }
 
@@ -351,8 +376,10 @@ function cross(a, b, key) {
 	return random(0, 1) == 0 ? a : b
 }
 function mutate(gene) {
-	if (Math.random() < 0.2) {
+	if (Math.random() < mutateRate) { // 0.2
 		gene += gene * (Math.random() - 0.5) * 3 + (Math.random() - 0.5);
+		// var mutateFactor = 1 + ((Math.random() - 0.5) * 3 + (Math.random() - 0.5));
+		// gene *= mutateFactor;
 	}
 	return gene;
 }
